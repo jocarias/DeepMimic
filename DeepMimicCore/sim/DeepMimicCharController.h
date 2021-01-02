@@ -22,11 +22,13 @@ public:
 	virtual bool NeedNewAction() const;
 	virtual void ApplyAction(const Eigen::VectorXd& action);
 	virtual void RecordState(Eigen::VectorXd& out_state);
+	virtual void RecordStateFull(Eigen::VectorXd& out_state);
 	virtual void RecordGoal(Eigen::VectorXd& out_goal) const;
 	virtual void RecordAction(Eigen::VectorXd& out_action) const;
 
 	virtual eActionSpace GetActionSpace() const;
 	virtual int GetStateSize() const;
+	virtual int GetStateSizeFull() const;
 
 	virtual double GetRewardMin() const;
 	virtual double GetRewardMax() const;
@@ -45,6 +47,8 @@ public:
 	virtual const Eigen::VectorXd& GetTau() const;
 	virtual const cCircularBuffer<double>& GetValLog() const;
 	virtual void LogVal(double val);
+
+	virtual void SetModeBabySupport(int mode);
 
 protected:
 	double mTime;
@@ -78,10 +82,13 @@ protected:
 	virtual void HandleNewAction();
 	virtual void PostProcessAction(Eigen::VectorXd& out_action) const;
 
+	virtual void BuildState(Eigen::VectorXd& out_state) const;
 	virtual void BuildStatePose(Eigen::VectorXd& out_pose) const;
 	virtual void BuildStateVel(Eigen::VectorXd& out_vel) const;
 	virtual int GetStatePoseOffset() const;
 	virtual int GetStateVelOffset() const;
 	virtual int GetStatePoseSize() const;
 	virtual int GetStateVelSize() const;
+
+	virtual void UpdateBabySupport() const;
 };

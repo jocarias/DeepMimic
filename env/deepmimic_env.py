@@ -78,6 +78,9 @@ class DeepMimicEnv(Env):
     def record_state(self, agent_id):
         return np.array(self._core.RecordState(agent_id))
 
+    def record_state_full(self, agent_id):
+        return np.array(self._core.RecordStateFull(agent_id))
+
     def record_goal(self, agent_id):
         return np.array(self._core.RecordGoal(agent_id))
 
@@ -164,3 +167,6 @@ class DeepMimicEnv(Env):
     def set_mode(self, mode):
         self._core.SetMode(mode.value)
         return
+
+    def set_mode_baby_support(self, agent_id, mode):
+        self._core.SetModeBabySupport(agent_id, mode)

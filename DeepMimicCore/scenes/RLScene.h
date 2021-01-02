@@ -31,6 +31,7 @@ public:
 	virtual int GetNumAgents() const = 0;
 	virtual bool NeedNewAction(int agent_id) const = 0;
 	virtual void RecordState(int agent_id, Eigen::VectorXd& out_state) const = 0;
+	virtual void RecordStateFull(int agent_id, Eigen::VectorXd& out_state) const = 0;
 	virtual void RecordGoal(int agent_id, Eigen::VectorXd& out_goal) const = 0;
 	virtual void SetAction(int agent_id, const Eigen::VectorXd& action) = 0;
 
@@ -60,6 +61,8 @@ public:
 	virtual void SetMode(eMode mode);
 
 	virtual void LogVal(int agent_id, double val) = 0;
+
+	virtual void SetModeBabySupport(int agent_id, int mode) = 0;
 
 protected:
 	eMode mMode;

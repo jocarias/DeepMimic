@@ -203,6 +203,21 @@ std::vector<double> cDeepMimicCore::RecordState(int agent_id) const
 	return std::vector<double>(0);
 }
 
+std::vector<double> cDeepMimicCore::RecordStateFull(int agent_id) const
+{
+	const auto& rl_scene = GetRLScene();
+	if (rl_scene != nullptr)
+	{
+		Eigen::VectorXd state;
+		rl_scene->RecordStateFull(agent_id, state);
+
+		std::vector<double> out_state;
+		ConvertVector(state, out_state);
+		return out_state;
+	}
+	return std::vector<double>(0);
+}
+
 std::vector<double> cDeepMimicCore::RecordGoal(int agent_id) const
 {
 	const auto& rl_scene = GetRLScene();
@@ -632,4 +647,11 @@ void cDeepMimicCore::ConvertVector(const std::vector<int>& in_vec, Eigen::Vector
 	int size = static_cast<int>(in_vec.size());
 	out_vec.resize(size);
 	std::memcpy(out_vec.data(), in_vec.data(), size * sizeof(int));
+}
+
+void cDeepMimicCore::SetModeBabySupport(int agent_id, int mode)
+{
+	const auto& rl_scene = GetRLScene();
+	if (rl_scene != nullptr)
+		rl_scene->SetModeBabySupport(agent_id, mode);
 }

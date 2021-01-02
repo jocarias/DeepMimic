@@ -10,6 +10,10 @@ from util.logger import Logger
 import util.mpi_util as MPIUtil
 import util.math_util as MathUtil
 from env.env import Env
+#####################[
+from learning.my_code import Settings, Mode
+#####################]
+
 
 '''
 Proximal Policy Optimization Agent
@@ -69,6 +73,13 @@ class PPOAgent(PGAgent):
         self.g_tf = tf.placeholder(tf.float32, shape=([None, g_size] if self.has_goal() else None), name="g")
         self.old_logp_tf = tf.placeholder(tf.float32, shape=[None], name="old_logp")
         self.exp_mask_tf = tf.placeholder(tf.float32, shape=[None], name="exp_mask")
+
+        #####################[
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            self.wt_tf = tf.placeholder(tf.float32, shape=([None, self.my_wt.scale_count, self.my_memory_buffer.length, self.my_memory_buffer.channel_count]), name="wt")
+        else:
+            self.wt_tf = tf.placeholder(tf.float32, shape=(None), name="wt")
+        #####################]
 
         with tf.variable_scope('main'):
             with tf.variable_scope('actor'):
@@ -144,19 +155,20 @@ class PPOAgent(PGAgent):
         
         return
 
-    def _decide_action(self, s, g):
+    def _decide_action(self, s, g, wt):
         with self.sess.as_default(), self.graph.as_default():
             self._exp_action = self._enable_stoch_policy() and MathUtil.flip_coin(self.exp_params_curr.rate)
-            a, logp = self._eval_actor(s, g, self._exp_action)
+            a, logp = self._eval_actor(s, g, wt, self._exp_action)
         return a[0], logp[0]
 
-    def _eval_actor(self, s, g, enable_exp):
+    def _eval_actor(self, s, g, wt, enable_exp):
         s = np.reshape(s, [-1, self.get_state_size()])
         g = np.reshape(g, [-1, self.get_goal_size()]) if self.has_goal() else None
-          
+        
         feed = {
             self.s_tf : s,
             self.g_tf : g,
+            self.wt_tf : wt,
             self.exp_mask_tf: np.array([1 if enable_exp else 0])
         }
 
@@ -222,13 +234,19 @@ class PPOAgent(PGAgent):
 
                 critic_s = self.replay_buffer.get('states', critic_batch)
                 critic_g = self.replay_buffer.get('goals', critic_batch) if self.has_goal() else None
-                curr_critic_loss = self._update_critic(critic_s, critic_g, critic_batch_vals)
+                #####################[
+                critic_wt = self.replay_buffer.get('wts', critic_batch) if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+                #####################]
+                curr_critic_loss = self._update_critic(critic_s, critic_g, critic_wt, critic_batch_vals)
 
                 actor_s = self.replay_buffer.get("states", actor_batch[:,0])
                 actor_g = self.replay_buffer.get("goals", actor_batch[:,0]) if self.has_goal() else None
+                #####################[
+                actor_wt = self.replay_buffer.get("wts", actor_batch[:,0]) if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+                #####################]
                 actor_a = self.replay_buffer.get("actions", actor_batch[:,0])
                 actor_logp = self.replay_buffer.get("logps", actor_batch[:,0])
-                curr_actor_loss, curr_actor_clip_frac = self._update_actor(actor_s, actor_g, actor_a, actor_logp, actor_batch_adv)
+                curr_actor_loss, curr_actor_clip_frac = self._update_actor(actor_s, actor_g, actor_wt, actor_a, actor_logp, actor_batch_adv)
                 
                 critic_loss += curr_critic_loss
                 actor_loss += np.abs(curr_actor_loss)
@@ -274,6 +292,10 @@ class PPOAgent(PGAgent):
     def _compute_batch_vals(self, start_idx, end_idx):
         states = self.replay_buffer.get_all("states")[start_idx:end_idx]
         goals = self.replay_buffer.get_all("goals")[start_idx:end_idx] if self.has_goal() else None
+
+        #####################[
+        wt = self.replay_buffer.get_all("wts")[start_idx:end_idx] if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+        #####################]
         
         idx = np.array(list(range(start_idx, end_idx)))        
         is_end = self.replay_buffer.is_path_end(idx)
@@ -282,7 +304,7 @@ class PPOAgent(PGAgent):
         is_fail = np.logical_and(is_end, is_fail) 
         is_succ = np.logical_and(is_end, is_succ) 
 
-        vals = self._eval_critic(states, goals)
+        vals = self._eval_critic(states, goals, wt)
         vals[is_fail] = self.val_fail
         vals[is_succ] = self.val_succ
 
@@ -308,10 +330,11 @@ class PPOAgent(PGAgent):
         
         return new_vals
 
-    def _update_critic(self, s, g, tar_vals):
+    def _update_critic(self, s, g, wt, tar_vals):
         feed = {
             self.s_tf: s,
             self.g_tf: g,
+            self.wt_tf: wt,
             self.tar_val_tf: tar_vals
         }
 
@@ -319,10 +342,11 @@ class PPOAgent(PGAgent):
         self.critic_solver.update(grads)
         return loss
     
-    def _update_actor(self, s, g, a, logp, adv):
+    def _update_actor(self, s, g, wt, a, logp, adv):
         feed = {
             self.s_tf: s,
             self.g_tf: g,
+            self.wt_tf: wt,
             self.a_tf: a,
             self.adv_tf: adv,
             self.old_logp_tf: logp

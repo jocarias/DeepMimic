@@ -87,6 +87,10 @@ class Env(ABC):
         pass
 
     @abstractmethod
+    def record_state_full(self, agent_id):
+        pass
+
+    @abstractmethod
     def record_goal(self, agent_id):
         pass
 
@@ -196,4 +200,8 @@ class Env(ABC):
 
     @abstractmethod
     def set_mode(self, mode):
+        pass
+
+    @abstractmethod
+    def set_mode_baby_support(self, agent_id, mode):
         pass

@@ -432,6 +432,13 @@ tVector cMathUtil::QuaternionToEuler(const tQuaternion& q)
 	return tVector(x, y, z, 0);
 }
 
+double cMathUtil::QuaternionToEulerZ(const tQuaternion& q)
+{
+	double siny = 2.0 * (q.w() * q.z() + q.x() * q.y());
+	double cosy = 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z());
+	return std::atan2(siny, cosy);
+}
+
 tQuaternion cMathUtil::AxisAngleToQuaternion(const tVector& axis, double theta)
 {
 	// axis must be normalized

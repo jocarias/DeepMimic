@@ -22,6 +22,7 @@ public:
 	virtual double GetPhase() const;
 
 	virtual int GetStateSize() const;
+	virtual int GetStateSizeFull() const;
 	virtual int GetActionSize() const;
 	virtual void BuildStateOffsetScale(Eigen::VectorXd& out_offset, Eigen::VectorXd& out_scale) const;
 	virtual void BuildActionBounds(Eigen::VectorXd& out_min, Eigen::VectorXd& out_max) const;
@@ -30,8 +31,11 @@ public:
 	virtual void BuildStateNormGroups(Eigen::VectorXi& out_groups) const;
 	
 	virtual void RecordState(Eigen::VectorXd& out_state);
+	virtual void RecordStateFull(Eigen::VectorXd& out_state);
 
 	virtual std::string GetName() const;
+
+	virtual void SetModeBabySupport(int mode);
 
 protected:
 	
@@ -41,6 +45,7 @@ protected:
 	bool mEnablePhaseAction;
 	bool mRecordWorldRootPos;
 	bool mRecordWorldRootRot;
+	int mBabySupportMode;
 
 	double mPhaseOffset;
 	double mInitTimeOffset;
@@ -71,6 +76,7 @@ protected:
 
 	virtual void BuildStatePhaseOffsetScale(Eigen::VectorXd& phase_offset, Eigen::VectorXd& phase_scale) const;
 
+	virtual void BuildState(Eigen::VectorXd& out_state) const;
 	virtual void BuildStatePose(Eigen::VectorXd& out_pose) const;
 	virtual void BuildStateVel(Eigen::VectorXd& out_vel) const;
 	virtual void BuildStatePhase(Eigen::VectorXd& out_phase) const;
@@ -81,4 +87,6 @@ protected:
 	virtual bool FlipStance() const;
 	virtual int RetargetJointID(int joint_id) const;
 	virtual double GetPhaseRate() const;
+
+	virtual void UpdateBabySupport() const;
 };

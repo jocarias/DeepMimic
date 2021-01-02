@@ -18,9 +18,9 @@
 	"BatchSize": 4096,
 	"MiniBatchSize": 256,
 	"Epochs": 1,
-	"ReplayBufferSize": 500000,
+	"ReplayBufferSize": 100000,
 	"InitSamples": 1,
-	"NormalizerSamples": 1000000,
+	"NormalizerSamples": 100000,
 
 	"RatioClip": 0.2,
 	"NormAdvClip": 4,

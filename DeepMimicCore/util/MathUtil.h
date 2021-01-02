@@ -86,6 +86,7 @@ public:
 
 	static tQuaternion EulerToQuaternion(const tVector& euler);
 	static tVector QuaternionToEuler(const tQuaternion& q);
+	static double cMathUtil::QuaternionToEulerZ(const tQuaternion& q);
 	static tQuaternion AxisAngleToQuaternion(const tVector& axis, double theta);
 	static void QuaternionToAxisAngle(const tQuaternion& q, tVector& out_axis, double& out_theta);
 	static tMatrix BuildQuaternionDiffMat(const tQuaternion& q);

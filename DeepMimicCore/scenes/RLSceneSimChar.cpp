@@ -61,6 +61,12 @@ void cRLSceneSimChar::RecordState(int agent_id, Eigen::VectorXd& out_state) cons
 	ctrl->RecordState(out_state);
 }
 
+void cRLSceneSimChar::RecordStateFull(int agent_id, Eigen::VectorXd& out_state) const
+{
+	const auto& ctrl = GetController(agent_id);
+	ctrl->RecordStateFull(out_state);
+}
+
 void cRLSceneSimChar::RecordGoal(int agent_id, Eigen::VectorXd& out_goal) const
 {
 	const auto& ctrl = GetController(agent_id);
@@ -309,4 +315,10 @@ void cRLSceneSimChar::UpdateTimerParams()
 		cTimer::tParams blend_params = mTimerParams.Blend(mTimerParamsEnd, lerp);
 		mTimer.SetParams(blend_params);
 	}
+}
+
+void cRLSceneSimChar::SetModeBabySupport(int agent_id, int mode)
+{
+	const auto& ctrl = GetController(agent_id);
+	ctrl->SetModeBabySupport(mode);
 }

@@ -34,6 +34,12 @@ void cCharController::RecordState(Eigen::VectorXd& out_state)
 {
 }
 
+
+void cCharController::RecordStateFull(Eigen::VectorXd& out_state)
+{
+}
+
+
 void cCharController::RecordGoal(Eigen::VectorXd& out_goal) const
 {
 }
@@ -128,4 +134,8 @@ int cCharController::NumChildren() const
 const std::shared_ptr<cCharController>& cCharController::GetChild(int i) const
 {
 	return nullptr;
+}
+
+void cCharController::SetModeBabySupport(int mode)
+{
 }

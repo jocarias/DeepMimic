@@ -3,6 +3,9 @@
 #include "util/FileUtil.h"
 #include "util/JsonUtil.h"
 
+const int joints_ids[11] = { 5, 11, 0, 3, 4, 6, 7, 9, 10, 12, 13};
+const int joint_count = 11;
+
 cCtController::cCtController() : cDeepMimicCharController()
 {
 	mUpdateRate = 30.0;
@@ -15,6 +18,8 @@ cCtController::cCtController() : cDeepMimicCharController()
 
 	mPhaseOffset = 0;
 	mInitTimeOffset = 0;
+
+	mBabySupportMode = 0;
 }
 
 cCtController::~cCtController()
@@ -57,6 +62,13 @@ void cCtController::UpdateCalcTau(double timestep, Eigen::VectorXd& out_tau)
 int cCtController::GetStateSize() const
 {
 	int state_size = cDeepMimicCharController::GetStateSize();
+	state_size += GetStatePhaseSize();
+	return state_size;
+}
+
+int cCtController::GetStateSizeFull() const
+{
+	int state_size = cDeepMimicCharController::GetStateSizeFull();
 	state_size += GetStatePhaseSize();
 	return state_size;
 }
@@ -296,6 +308,20 @@ void cCtController::RecordState(Eigen::VectorXd& out_state)
 	}
 }
 
+void cCtController::RecordStateFull(Eigen::VectorXd& out_state)
+{
+	Eigen::VectorXd phase_state;
+	cDeepMimicCharController::RecordStateFull(out_state);
+
+	if (mEnablePhaseInput)
+	{
+		int phase_offset = GetStatePhaseOffset();
+		int phase_size = GetStatePhaseSize();
+		BuildStatePhase(phase_state);
+		out_state.segment(phase_offset, phase_size) = phase_state;
+	}
+}
+
 std::string cCtController::GetName() const
 {
 	return "ct";
@@ -363,6 +389,61 @@ void cCtController::BuildStatePhaseOffsetScale(Eigen::VectorXd& phase_offset, Ei
 	int phase_size = GetStatePhaseSize();
 	phase_offset = offset * Eigen::VectorXd::Ones(phase_size);
 	phase_scale = scale * Eigen::VectorXd::Ones(phase_size);
+}
+
+void cCtController::BuildState(Eigen::VectorXd& out_state) const
+{
+	out_state = Eigen::VectorXd::Zero(GetStateSize());
+	int pos_dim = GetPosFeatureDim();
+	int rot_dim = GetRotFeatureDim();
+	int root_id = mChar->GetRootID();
+	
+	// add root linear velocity
+	tVector curr_vel = mChar->GetBodyPart(root_id)->GetLinearVelocity();
+	int phaseOffset = 1;
+	out_state.segment(phaseOffset, pos_dim) = curr_vel.segment(0, pos_dim);
+	int idx = pos_dim + phaseOffset;
+
+	// add angles
+	tMatrix origin_trans = mChar->BuildOriginTrans();
+	tQuaternion origin_quat = cMathUtil::RotMatToQuaternion(origin_trans);
+
+	int num_parts = mChar->GetNumBodyParts();
+
+	for (int i = 0; i < joint_count; ++i)
+	{
+		int part_id = RetargetJointID(joints_ids[i]);
+		if (mChar->IsValidBodyPart(part_id))
+		{
+			const auto& curr_part = mChar->GetBodyPart(part_id);
+			tQuaternion curr_quat = curr_part->GetRotation();
+			if (!(mRecordWorldRootRot && part_id == root_id))
+			{
+				curr_quat = origin_quat * curr_quat;
+			}
+
+			if (curr_quat.w() < 0)
+			{
+				curr_quat.w() *= -1;
+				curr_quat.x() *= -1;
+				curr_quat.y() *= -1;
+				curr_quat.z() *= -1;
+			}
+
+			// 1D for elbows and knees
+			if (part_id == 4 || part_id == 7 || part_id == 10 || part_id == 13)
+			{
+				double eulerZ = cMathUtil::QuaternionToEulerZ(curr_quat);
+				out_state[idx] = eulerZ;
+				idx += 1;
+			}
+			else
+			{
+				out_state.segment(idx, rot_dim) = cMathUtil::QuatToVec(curr_quat).segment(0, rot_dim);
+				idx += rot_dim;
+			}
+		}
+	}
 }
 
 void cCtController::BuildStatePose(Eigen::VectorXd& out_pose) const
@@ -565,4 +646,86 @@ double cCtController::GetPhaseRate() const
 		phase_rate = mAction[phase_offset];
 	}
 	return phase_rate;
+}
+
+void cCtController::SetModeBabySupport(int mode)
+{
+	mBabySupportMode = mode;
+}
+
+void cCtController::UpdateBabySupport() const 
+{
+	if (mBabySupportMode == 0)
+		return; // no support
+
+	//Stops the character from falling
+
+	tVector root_pos = mChar->GetRootPos();
+	float y_min = 0.73;
+	if (root_pos[1] <= y_min )
+	{
+		tVector new_force = tVector();
+		new_force[1] = 500;
+		mChar->ApplyForce(new_force);
+
+		//printf("Height: %f\n", root_pos[1]);
+	}
+
+	tVector new_angular_velocity = mChar->GetAngularVelocity();
+	tQuaternion part_rot = mChar->GetRotation();
+	tVector rot = cMathUtil::QuaternionToEuler(part_rot);
+	float rot_max = 0.1f;
+
+	//printf("rot x: %f, rot y: %f, rot z: %f\n", rot[0], rot[1], rot[2]);
+	
+	tVector new_torque = tVector();
+	bool apply_force = false;
+
+	if (rot[0] < -0.3f)
+	{
+		new_torque[0] = 100;
+		apply_force = true;
+
+		//printf("rot x: %f\n", rot[0]);
+	}
+	else if (rot[0] > 0.3f)
+	{
+		new_torque[0] = -100;
+		apply_force = true;
+
+		//printf("rot x: %f\n", rot[0]);
+	}
+
+	if (rot[1] < -0.35f)
+	{
+		new_torque[1] = 100;
+		apply_force = true;
+
+		//printf("rot y: %f\n", rot[1]);
+	}
+	else if (rot[1] > 0.35f)
+	{
+		new_torque[1] = -100;
+		apply_force = true;
+
+		//printf("rot y: %f\n", rot[1]);
+	}
+	
+	if (rot[2] < -0.6f)
+	{
+		new_torque[2] = 200;
+		apply_force = true;
+
+		//printf("rot z: %f\n", rot[2]);
+	}
+	else if (rot[2] > 0.2f)
+	{
+		new_torque[2] = -100;
+		apply_force = true;
+
+		//printf("rot z: %f\n", rot[2]);
+	}
+	
+	if(apply_force)
+		mChar->ApplyTorque(new_torque);
 }

@@ -29,6 +29,11 @@ void cDrawRLScene::RecordState(int agent_id, Eigen::VectorXd& out_state) const
 	GetRLScene()->RecordState(agent_id, out_state);
 }
 
+void cDrawRLScene::RecordStateFull(int agent_id, Eigen::VectorXd& out_state) const
+{
+	GetRLScene()->RecordStateFull(agent_id, out_state);
+}
+
 void cDrawRLScene::RecordGoal(int agent_id, Eigen::VectorXd& out_goal) const
 {
 	GetRLScene()->RecordGoal(agent_id, out_goal);
@@ -152,4 +157,9 @@ void cDrawRLScene::LogVal(int agent_id, double val)
 std::string cDrawRLScene::GetName() const
 {
 	return GetRLScene()->GetName();
+}
+
+void cDrawRLScene::SetModeBabySupport(int agent_id, int mode)
+{
+	GetRLScene()->SetModeBabySupport(agent_id, mode);
 }

@@ -45,6 +45,7 @@ public:
 	virtual int GetNumAgents() const;
 	virtual bool NeedNewAction(int agent_id) const;
 	virtual std::vector<double> RecordState(int agent_id) const;
+	virtual std::vector<double> RecordStateFull(int agent_id) const;
 	virtual std::vector<double> RecordGoal(int agent_id) const;
 	virtual void SetAction(int agent_id, const std::vector<double>& action);
 	virtual void LogVal(int agent_id, double val);
@@ -78,6 +79,8 @@ public:
 	virtual int CheckTerminate(int agent_id) const;
 	virtual void SetMode(int mode);
 	virtual void SetSampleCount(int count);
+
+	virtual void SetModeBabySupport(int agent_id, int mode);
 
 protected:
 	unsigned long int mRandSeed;

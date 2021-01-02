@@ -14,6 +14,7 @@ class Path(object):
         l = self.pathlength()
         valid &= len(self.states) == l + 1
         valid &= len(self.goals) == l + 1
+        valid &= len(self.wts) == l + 1
         valid &= len(self.actions) == l
         valid &= len(self.logps) == l
         valid &= len(self.rewards) == l
@@ -22,7 +23,7 @@ class Path(object):
         return valid
 
     def check_vals(self):
-        for vals in [self.states, self.goals, self.actions, self.logps,
+        for vals in [self.states, self.goals, self.wts, self.actions, self.logps,
                   self.rewards]:
             for v in vals:
                 if not np.isfinite(v).all():
@@ -32,6 +33,9 @@ class Path(object):
     def clear(self):
         self.states = []
         self.goals = []
+        #####################[
+        self.wts = []
+        #####################]
         self.actions = []
         self.logps = []
         self.rewards = []

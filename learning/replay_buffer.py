@@ -196,8 +196,15 @@ class ReplayBuffer(object):
                     val_type = type(val[0])
                     is_array = val_type == np.ndarray
                     if is_array:
-                        shape = [self.buffer_size, val[0].shape[0]]
-                        dtype = val[0].dtype
+                        #####################[
+                        if len(val[0]) > 0 and type(val[0][0]) == np.ndarray:
+                            shape = [self.buffer_size]
+                            shape.extend(list(val[0].shape))
+                            dtype = val[0].dtype
+                        else:
+                        #####################]
+                            shape = [self.buffer_size, val[0].shape[0]]
+                            dtype = val[0].dtype
                     else:
                         shape = [self.buffer_size]
                         dtype = val_type

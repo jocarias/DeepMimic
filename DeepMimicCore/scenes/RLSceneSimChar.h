@@ -20,6 +20,7 @@ public:
 	virtual int GetNumAgents() const;
 	virtual bool NeedNewAction(int agent_id) const;
 	virtual void RecordState(int agent_id, Eigen::VectorXd& out_state) const;
+	virtual void RecordStateFull(int agent_id, Eigen::VectorXd& out_state) const;
 	virtual void RecordGoal(int agent_id, Eigen::VectorXd& out_goal) const;
 	virtual void SetAction(int agent_id, const Eigen::VectorXd& action);
 
@@ -47,6 +48,8 @@ public:
 	virtual void SetSampleCount(int count);
 
 	virtual std::string GetName() const;
+
+	virtual void SetModeBabySupport(int agent_id, int mode);
 
 protected:
 

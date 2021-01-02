@@ -24,6 +24,7 @@ public:
 	virtual bool NeedNewAction() const;
 	virtual void ApplyAction(const Eigen::VectorXd& action);
 	virtual void RecordState(Eigen::VectorXd& out_state);
+	virtual void RecordStateFull(Eigen::VectorXd& out_state);
 	virtual void RecordGoal(Eigen::VectorXd& out_goal) const;
 	virtual void RecordAction(Eigen::VectorXd& out_action) const;
 
@@ -51,6 +52,8 @@ public:
 	virtual const std::shared_ptr<cCharController>& GetChild(int i) const;
 
 	virtual std::string GetName() const = 0;
+
+	virtual void SetModeBabySupport(int mode);
 
 protected:
 

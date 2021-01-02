@@ -13,6 +13,9 @@ from learning.replay_buffer import ReplayBuffer
 from util.logger import Logger
 import util.mpi_util as MPIUtil
 import util.math_util as MathUtil
+#####################[
+from learning.my_code import MyWT, MyMemoryBuffer, Settings, Mode
+#####################]
 
 class RLAgent(ABC):
     class Mode(Enum):
@@ -87,6 +90,29 @@ class RLAgent(ABC):
         self._build_bounds()
         self.reset()
 
+        #####################[
+        self.is_baby_support_on = False
+        #  self.baby_support_threshold = baby_support_max_value * policy frequency (query_rate) * max_step_train_time
+        self.baby_support_threshold = 0.8 * 30 * 20
+        if Settings.use_babe_support():
+            self._set_on_baby_support()
+
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            channels = ["r_hip_w", "r_hip_x", "r_hip_y", "r_hip_z", "r_knee_rot", "r_shoulder_w", "r_shoulder_x", 
+                        "r_shoulder_y", "r_shoulder_z", "r_elbow_rot", "l_hip_w", "l_hip_x", "l_hip_y", "l_hip_z",
+                        "r_knee_rot", "r_shoulder_w", "r_shoulder_x", "r_shoulder_y", "r_shoulder_z", "l_elbow_rot"]
+            memory_buffer_size = 16
+            cache_size = 1
+            self.my_memory_buffer = MyMemoryBuffer(channels, memory_buffer_size, cache_size)
+
+            scale_min = 1
+            scale_max = memory_buffer_size 
+            scale_count = memory_buffer_size # square scalogram
+            self.my_wt = MyWT(scale_min, scale_max, scale_count)
+
+            # get test data
+            #self.my_rawStateData = MyRawStateData(197, 1200)
+        #####################]
         return
 
     def __str__(self):
@@ -120,7 +146,15 @@ class RLAgent(ABC):
         self.path.clear()
         return
 
+
     def update(self, timestep):
+        #####################[
+        #self.my_update_count += 1
+        #if self.has_wt():
+        #    state_data = self._record_state()
+            #self.my_rawStateData.save_state(state_data)
+        #    self.my_wt.save(state_data)
+        #####################]
         if self.need_new_action():
             self._update_new_action()
 
@@ -148,6 +182,11 @@ class RLAgent(ABC):
                 assert False, Logger.print("Unsupported RL agent mode" + str(self._mode))
 
             self._update_mode()
+
+        #####################[
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            self.my_memory_buffer.reset()
+        #####################]
         return
 
     def has_goal(self):
@@ -182,7 +221,7 @@ class RLAgent(ABC):
         pass
 
     @abstractmethod
-    def _decide_action(self, s, g):
+    def _decide_action(self, s, g, wt):
         pass
 
     @abstractmethod
@@ -295,6 +334,10 @@ class RLAgent(ABC):
         s = self.world.env.record_state(self.id)
         return s
 
+    def _record_state_full(self):
+        s = self.world.env.record_state_full(self.id)
+        return s
+
     def _record_goal(self):
         g = self.world.env.record_goal(self.id)
         return g
@@ -316,11 +359,21 @@ class RLAgent(ABC):
     def _end_path(self):
         s = self._record_state()
         g = self._record_goal()
+        #####################[
+        wt = []
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            # saves only a reduced set of state variables -> the last "len(channels)"
+            self.my_memory_buffer.save(s[-self.my_memory_buffer.channel_count:])
+            wt = self.my_wt.calculate_cwt(self.my_memory_buffer)
+        #####################]
         r = self._record_reward()
 
         self.path.rewards.append(r)
         self.path.states.append(s)
         self.path.goals.append(g)
+        #####################[
+        self.path.wts.append(wt)
+        #####################]
         self.path.terminate = self.world.env.check_terminate(self.id)
 
         return
@@ -329,11 +382,20 @@ class RLAgent(ABC):
         s = self._record_state()
         g = self._record_goal()
 
+        #####################[
+        #self.my_update_array.append(self.my_update_count)
+        #self.my_update_count = 0
+        wt = [[]]
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            self.my_memory_buffer.save(s[-self.my_memory_buffer.channel_count:])
+            wt = [self.my_wt.calculate_cwt(self.my_memory_buffer)]
+        #####################]
+
         if not (self._is_first_step()):
             r = self._record_reward()
             self.path.rewards.append(r)
         
-        a, logp = self._decide_action(s=s, g=g)
+        a, logp = self._decide_action(s=s, g=g, wt=wt)
         assert len(np.shape(a)) == 1
         assert len(np.shape(logp)) <= 1
 
@@ -342,14 +404,25 @@ class RLAgent(ABC):
 
         self.path.states.append(s)
         self.path.goals.append(g)
+        #####################[
+        self.path.wts.append(wt[0])
+        #####################]
         self.path.actions.append(a)
         self.path.logps.append(logp)
         self.path.flags.append(flags)
         
         if self._enable_draw():
-            self._log_val(s, g)
+            self._log_val(s, g, wt)
         
         return
+
+    def _set_on_baby_support(self):
+        self.is_baby_support_on = True
+        self.world.env.set_mode_baby_support(self.id, 1)
+
+    def _set_off_baby_support(self):
+        self.is_baby_support_on = False
+        self.world.env.set_mode_baby_support(self.id, 0)
     
     def _update_exp_params(self):
         lerp = float(self._total_sample_count) / self.exp_anneal_samples
@@ -475,7 +548,7 @@ class RLAgent(ABC):
     def _enable_draw(self):
         return self.world.env.enable_draw
 
-    def _log_val(self, s, g):
+    def _log_val(self, s, g, wt):
         pass
 
     def _build_replay_buffer(self, buffer_size):
@@ -560,6 +633,11 @@ class RLAgent(ABC):
                 if (prev_iter // self.int_output_iters != self.iter // self.int_output_iters):
                     end_training = self.enable_testing()
 
+                #####################[
+                if Settings.use_babe_support() and self.is_baby_support_on:
+                    if self.avg_test_return > self.baby_support_threshold:
+                        self._set_off_baby_support()
+                #####################]
         else:
 
             Logger.print("Agent " + str(self.id))

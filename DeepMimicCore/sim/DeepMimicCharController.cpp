@@ -54,6 +54,8 @@ void cDeepMimicCharController::Clear()
 
 void cDeepMimicCharController::Update(double time_step)
 {
+	UpdateBabySupport();
+
 	cCharController::Update(time_step);
 	UpdateCalcTau(time_step, mTau);
 	UpdateApplyTau(mTau);
@@ -155,7 +157,12 @@ void cDeepMimicCharController::ApplyAction(const Eigen::VectorXd& action)
 
 void cDeepMimicCharController::RecordState(Eigen::VectorXd& out_state)
 {
-	int state_size = GetStateSize();
+	BuildState(out_state);
+}
+
+void cDeepMimicCharController::RecordStateFull(Eigen::VectorXd& out_state)
+{
+	int state_size = GetStateSizeFull();
 	// fill with nans to make sure we don't forget to set anything
 	out_state = std::numeric_limits<double>::quiet_NaN() * Eigen::VectorXd::Ones(state_size);
 
@@ -191,6 +198,14 @@ void cDeepMimicCharController::RecordAction(Eigen::VectorXd& out_action) const
 }
 
 int cDeepMimicCharController::GetStateSize() const
+{
+	//root linear vel (3D), root rotation(4D), right hip rotation(4D), right knee rotation(1D), 
+	//13: right ankle rotation(4D), right shoulder rotation(4D), right elbow rotation(1D), left hip rotation(4D),
+	//10: left knee rotation(1D), left ankle rotation(4D), left shoulder rotation(4D), left elbow rotation(1D)
+	return 35;
+}
+
+int cDeepMimicCharController::GetStateSizeFull() const
 {
 	int state_size = 0;
 	state_size += GetStatePoseSize();
@@ -271,6 +286,10 @@ void cDeepMimicCharController::PostProcessAction(Eigen::VectorXd& out_action) co
 {
 }
 
+void cDeepMimicCharController::BuildState(Eigen::VectorXd& out_state) const
+{
+}
+
 void cDeepMimicCharController::BuildStatePose(Eigen::VectorXd& out_pose) const
 {
 	tMatrix origin_trans = mChar->BuildOriginTrans();
@@ -341,4 +360,12 @@ int cDeepMimicCharController::GetStatePoseSize() const
 int cDeepMimicCharController::GetStateVelSize() const
 {
 	return mChar->GetNumBodyParts() * mPosDim;
+}
+
+void cDeepMimicCharController::SetModeBabySupport(int mode)
+{
+}
+
+void cDeepMimicCharController::UpdateBabySupport() const
+{
 }

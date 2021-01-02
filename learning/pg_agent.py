@@ -13,6 +13,10 @@ import util.mpi_util as MPIUtil
 import util.math_util as MathUtil
 from env.action_space import ActionSpace
 from env.env import Env
+#####################[
+from learning.my_code  import MyCNN, Settings, Mode
+#####################[
+
 
 '''
 Policy Gradient Agent
@@ -72,6 +76,13 @@ class PGAgent(TFAgent):
         self.adv_tf = tf.placeholder(tf.float32, shape=[None], name="adv") # advantage
         self.a_tf = tf.placeholder(tf.float32, shape=[None, a_size], name="a") # target actions
         self.g_tf = tf.placeholder(tf.float32, shape=([None, g_size] if self.has_goal() else None), name="g") # goals
+
+        #####################[
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            self.wt_tf = tf.placeholder(tf.float32, shape=([None, self.my_wt.scale_count, self.my_memory_buffer.length, self.my_memory_buffer.channel_count]), name="wt")
+        else:
+            self.wt_tf = tf.placeholder(tf.float32, shape=(None), name="wt")
+        #####################]
 
         with tf.variable_scope('main'):
             with tf.variable_scope('actor'):
@@ -159,6 +170,12 @@ class PGAgent(TFAgent):
         if (self.has_goal()):
             norm_g_tf = self.g_norm.normalize_tf(self.g_tf)
             input_tfs += [norm_g_tf]
+
+        #####################[
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            cnn_network = NetBuilder.build_net(MyCNN.NAME, self.wt_tf, self.my_memory_buffer.channel_count)
+            input_tfs += [cnn_network]
+        #####################]
         
         h = NetBuilder.build_net(net_name, input_tfs)
         norm_a_tf = tf.layers.dense(inputs=h, units=self.get_action_size(), activation=None,
@@ -173,6 +190,12 @@ class PGAgent(TFAgent):
         if (self.has_goal()):
             norm_g_tf = self.g_norm.normalize_tf(self.g_tf)
             input_tfs += [norm_g_tf]
+
+        #####################[
+        if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2:
+            cnn_network = NetBuilder.build_net(MyCNN.NAME, self.wt_tf, self.my_memory_buffer.channel_count)
+            input_tfs += [cnn_network]
+        #####################]
         
         h = NetBuilder.build_net(net_name, input_tfs)
         norm_val_tf = tf.layers.dense(inputs=h, units=1, activation=None,
@@ -192,10 +215,10 @@ class PGAgent(TFAgent):
         self.critic_solver.sync()
         return
 
-    def _decide_action(self, s, g):
+    def _decide_action(self, s, g, wt):
         with self.sess.as_default(), self.graph.as_default():
             self._exp_action = False
-            a = self._eval_actor(s, g)[0]
+            a = self._eval_actor(s, g, wt)[0]
             logp = 0
 
             if self._enable_stoch_policy():
@@ -215,26 +238,28 @@ class PGAgent(TFAgent):
     def _enable_stoch_policy(self):
         return self.enable_training and (self._mode == self.Mode.TRAIN or self._mode == self.Mode.TRAIN_END)
 
-    def _eval_actor(self, s, g):
+    def _eval_actor(self, s, g, wt):
         s = np.reshape(s, [-1, self.get_state_size()])
         g = np.reshape(g, [-1, self.get_goal_size()]) if self.has_goal() else None
           
         feed = {
             self.s_tf : s,
-            self.g_tf : g
+            self.g_tf : g,
+            self.wt_tf : wt
         }
 
         a = self.actor_tf.eval(feed)
         return a
     
-    def _eval_critic(self, s, g):
+    def _eval_critic(self, s, g, wt):
         with self.sess.as_default(), self.graph.as_default():
             s = np.reshape(s, [-1, self.get_state_size()])
             g = np.reshape(g, [-1, self.get_goal_size()]) if self.has_goal() else None
 
             feed = {
                 self.s_tf : s,
-                self.g_tf : g
+                self.g_tf : g,
+                self.wt_tf : wt
             }
 
             val = self.critic_tf.eval(feed)    
@@ -268,13 +293,17 @@ class PGAgent(TFAgent):
         idx = self.replay_buffer.sample(self._local_mini_batch_size)
         s = self.replay_buffer.get('states', idx)
         g = self.replay_buffer.get('goals', idx) if self.has_goal() else None
-        
+        #####################[
+        wt = self.replay_buffer.get('wts', idx) if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+        #####################]
+
         tar_V = self._calc_updated_vals(idx)
         tar_V = np.clip(tar_V, self.val_min, self.val_max)
 
         feed = {
             self.s_tf: s,
             self.g_tf: g,
+            self.wt_tf: wt,
             self.tar_val_tf: tar_V
         }
 
@@ -289,15 +318,19 @@ class PGAgent(TFAgent):
 
         s = self.replay_buffer.get('states', idx)
         g = self.replay_buffer.get('goals', idx) if has_goal else None
+        #####################[
+        wt = self.replay_buffer.get('wts', idx) if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+        #####################]
         a = self.replay_buffer.get('actions', idx)
 
         V_new = self._calc_updated_vals(idx)
-        V_old = self._eval_critic(s, g)
+        V_old = self._eval_critic(s, g, wt)
         adv = V_new - V_old
 
         feed = {
             self.s_tf: s,
             self.g_tf: g,
+            self.wt_tf: wt,
             self.a_tf: a,
             self.adv_tf: adv
         }
@@ -316,6 +349,9 @@ class PGAgent(TFAgent):
             next_idx = self.replay_buffer.get_next_idx(idx)
             s_next = self.replay_buffer.get('states', next_idx)
             g_next = self.replay_buffer.get('goals', next_idx) if self.has_goal() else None
+            #####################[
+            wt_next = self.replay_buffer.get('wts', next_idx) if Settings.mode() == Mode.CWT_CNN_v1 or Settings.mode() == Mode.CWT_CNN_v2 else None
+            #####################]
 
             is_end = self.replay_buffer.is_path_end(idx)
             is_fail = self.replay_buffer.check_terminal_flag(idx, Env.Terminate.Fail)
@@ -323,7 +359,7 @@ class PGAgent(TFAgent):
             is_fail = np.logical_and(is_end, is_fail) 
             is_succ = np.logical_and(is_end, is_succ) 
 
-            V_next = self._eval_critic(s_next, g_next)
+            V_next = self._eval_critic(s_next, g_next, wt_next)
             V_next[is_fail] = self.val_fail
             V_next[is_succ] = self.val_succ
 
@@ -341,8 +377,8 @@ class PGAgent(TFAgent):
         logp += -a_size * np.log(stdev)
         return logp
 
-    def _log_val(self, s, g):
-        val = self._eval_critic(s, g)
+    def _log_val(self, s, g, wt):
+        val = self._eval_critic(s, g, wt)
         norm_val = self.val_norm.normalize(val)
         self.world.env.log_val(self.id, norm_val[0])
         return
